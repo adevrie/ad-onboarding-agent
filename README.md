@@ -3,7 +3,7 @@
 
 An agentic AI system that automates employee onboarding and offboarding workflows in a simulated hybrid enterprise IT environment modeled on a real production domain. The system uses Claude as a reasoning agent — all workflow decisions are made by the LLM, not hardcoded Python logic.
 
-> **Live Demo:** [DEPLOYMENT URL — update after Streamlit Cloud deploy]
+> **Live Demo:** [https://ad-app-agent-gvsu.streamlit.app/](https://ad-app-agent-gvsu.streamlit.app/)
 > **Course:** AI 502 · Project 3 · Grand Valley State University
 
 ---
@@ -229,7 +229,7 @@ The mock data in `tools.py` represents the MOCKCO domain (`mockcompany.local`). 
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/YOUR_USERNAME/ad-onboarding-agent.git
+git clone https://github.com/adevrie/ad-onboarding-agent.git
 cd ad-onboarding-agent
 
 # 2. Install dependencies
