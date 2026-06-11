@@ -27,11 +27,13 @@ The agent reads your request in plain English and autonomously
 determines which IT actions to take (AD, Exchange, M365, etc.).
 
 Example requests:
-  • Onboard Sarah Chen as a Software Engineer in Engineering,
-    starting 2026-06-16, manager is rjohnson
-  • Immediately offboard jsmith — security incident
-  • Check the status of Maria Williams
-  • Onboard a new Finance Manager named David Park
+  • Onboard a new Process Engineer named Alex Rivera in Holland,
+    starting 2026-06-23, manager is bmartinez
+  • Immediately offboard rwilson — security incident
+  • Onboard a new IT Admin named Jamie Torres in Grand Rapids
+  • What is the current status of Sandra Lopez?
+  • Offboard tpatel — voluntary resignation, last day June 20,
+    delegate to cthompson
 
 Type  quit  or  exit  to stop.
 """

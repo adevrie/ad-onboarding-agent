@@ -1,0 +1,191 @@
+[
+  {
+    "id": "TC-01",
+    "description": "Standard onboarding — HR Generalist in Holland",
+    "request": "Onboard Danniell Mayhew as an HR Generalist in Holland, starting 2026-06-15, manager is slopez",
+    "expected_tools": [
+      "get_onboarding_template",
+      "get_department_policies",
+      "create_ad_user",
+      "assign_ad_groups",
+      "provision_exchange_mailbox",
+      "assign_m365_license"
+    ],
+    "expected_tool_order_matters": true,
+    "criteria": [
+      "create_ad_user must be called before assign_ad_groups",
+      "assign_ad_groups and provision_exchange_mailbox must both complete before assign_m365_license",
+      "User is created with email danniell.mayhew@mockcompany.com and OU=Users,OU=Holland",
+      "M365 license assigned is Microsoft365_E3 per MOCKCO HR policy",
+      "Final response includes Summary, Actions Taken, Outstanding Items, and Credentials sections"
+    ],
+    "result": "pass",
+    "tools_actually_called": [
+      "get_onboarding_template",
+      "get_department_policies",
+      "create_ad_user",
+      "assign_ad_groups",
+      "provision_exchange_mailbox",
+      "assign_m365_license"
+    ],
+    "notes": "Confirmed in live run 2026-06-11. Agent correctly parallelized independent tool calls on turns 1 and 3 (get_onboarding_template + get_department_policies, then assign_ad_groups + provision_exchange_mailbox). License correctly assigned as E3 per MOCKCO HR policy."
+  },
+  {
+    "id": "TC-02",
+    "description": "IT Admin onboarding — dual account creation",
+    "request": "Onboard a new IT Admin named Jamie Torres in Grand Rapids",
+    "expected_tools": [
+      "get_onboarding_template",
+      "get_department_policies",
+      "create_ad_user",
+      "assign_ad_groups",
+      "provision_exchange_mailbox",
+      "assign_m365_license"
+    ],
+    "expected_tool_order_matters": true,
+    "criteria": [
+      "create_ad_user automatically creates both jtorres and jtorres-admin",
+      "jtorres-admin is placed in OU=Admins and receives no mailbox or M365 license",
+      "jtorres receives Microsoft365_E5 per MOCKCO IT policy",
+      "Groups assigned include SG-IT-Full and SG-Role-ITAdmin"
+    ],
+    "result": "pass",
+    "tools_actually_called": [
+      "get_onboarding_template",
+      "get_department_policies",
+      "create_ad_user",
+      "assign_ad_groups",
+      "provision_exchange_mailbox",
+      "assign_m365_license"
+    ],
+    "notes": "create_ad_user auto-created jtorres-admin in OU=Admins as expected. E5 license correctly assigned to the standard account only; no mailbox/license provisioning was attempted for the admin account."
+  },
+  {
+    "id": "TC-03",
+    "description": "Emergency offboarding — security incident",
+    "request": "Immediately offboard rwilson — security incident, suspected account compromise",
+    "expected_tools": [
+      "get_user_status",
+      "revoke_access",
+      "disable_ad_user"
+    ],
+    "expected_tool_order_matters": true,
+    "criteria": [
+      "revoke_access is called BEFORE disable_ad_user (emergency protocol)",
+      "revoke_access is called with emergency=true and offboard_type=\"security_incident\"",
+      "revoke_access result includes INCIDENT_RESPONSE_TRIGGERED action",
+      "Final response notes priority=IMMEDIATE"
+    ],
+    "result": "pass",
+    "tools_actually_called": [
+      "get_user_status",
+      "revoke_access",
+      "disable_ad_user"
+    ],
+    "notes": "Agent correctly detected emergency keywords (\"immediately\", \"security incident\", \"compromise\") and reversed the standard order — revoke before disable. INCIDENT_RESPONSE_TRIGGERED action present in revoke_access result."
+  },
+  {
+    "id": "TC-04",
+    "description": "Normal offboarding — voluntary resignation",
+    "request": "Offboard tpatel — voluntary resignation, last day June 20, delegate to cthompson",
+    "expected_tools": [
+      "get_user_status",
+      "disable_ad_user",
+      "revoke_access"
+    ],
+    "expected_tool_order_matters": true,
+    "criteria": [
+      "disable_ad_user is called BEFORE revoke_access (standard protocol — opposite of TC-03)",
+      "revoke_access is called with offboard_type=\"resignation\"",
+      "Mailbox is converted to shared with forwarding/delegation noted for cthompson",
+      "OneDrive transfer to cthompson is noted as an action or outstanding item"
+    ],
+    "result": "pass",
+    "tools_actually_called": [
+      "get_user_status",
+      "disable_ad_user",
+      "revoke_access"
+    ],
+    "notes": "Order is the opposite of TC-03 as expected for a standard resignation. Mailbox conversion to shared and OneDrive transfer to cthompson were both reflected in the revoke_access result and the final summary."
+  },
+  {
+    "id": "TC-05",
+    "description": "Status check — existing user by full name",
+    "request": "What is the current status of Sandra Lopez?",
+    "expected_tools": [
+      "get_user_status"
+    ],
+    "expected_tool_order_matters": false,
+    "criteria": [
+      "Only one tool call is made",
+      "Partial name match resolves \"Sandra Lopez\" to username slopez",
+      "Response includes location, groups, license, and last login"
+    ],
+    "result": "pass",
+    "tools_actually_called": [
+      "get_user_status"
+    ],
+    "notes": "Single tool call, no unnecessary lookups. Partial name match resolved correctly to slopez. Response included all requested fields."
+  },
+  {
+    "id": "TC-06",
+    "description": "Ambiguous request — missing required location",
+    "request": "Onboard a new employee in Engineering",
+    "expected_tools": [],
+    "expected_tool_order_matters": false,
+    "criteria": [
+      "Agent does not call create_ad_user without a location",
+      "Agent asks for the employee's name and work location before proceeding",
+      "Agent explains why location is required (location-based OU placement at MOCKCO)"
+    ],
+    "result": "pass",
+    "tools_actually_called": [],
+    "notes": "Agent asked for name and location before calling any tools, citing that OU placement at MOCKCO is location-based. No premature account creation occurred."
+  },
+  {
+    "id": "TC-07",
+    "description": "Status check — unknown user",
+    "request": "Check the status of nobody_here_xyz",
+    "expected_tools": [
+      "get_user_status"
+    ],
+    "expected_tool_order_matters": false,
+    "criteria": [
+      "get_user_status is called and returns found=false",
+      "Agent handles the not-found result gracefully without crashing",
+      "Agent suggests verifying the username or trying a different search term"
+    ],
+    "result": "pass",
+    "tools_actually_called": [
+      "get_user_status"
+    ],
+    "notes": "Tool returned found=false as expected. Agent reported the user could not be located and suggested double-checking the username — no crash or unhandled exception."
+  },
+  {
+    "id": "TC-08",
+    "description": "OU placement bug (documented failure, now fixed)",
+    "request": "Onboard a new HR Coordinator in Holland",
+    "expected_tools": [
+      "get_onboarding_template",
+      "get_department_policies",
+      "create_ad_user",
+      "assign_ad_groups",
+      "provision_exchange_mailbox",
+      "assign_m365_license"
+    ],
+    "expected_tool_order_matters": true,
+    "criteria": [
+      "create_ad_user places the new user in OU=Users,OU=Holland (not OU=General)",
+      "Department lookup for \"HR\" resolves correctly regardless of casing"
+    ],
+    "result": "fail",
+    "tools_actually_called": [
+      "get_onboarding_template",
+      "get_department_policies",
+      "create_ad_user",
+      "assign_ad_groups",
+      "provision_exchange_mailbox"
+    ],
+    "notes": "HISTORICAL FAILURE — fixed in Session 2. In tools.py v1, department.title() converted \"HR\" to \"Hr\", causing the OU map lookup to fail and placing the user in OU=General instead of OU=Users,OU=Holland. Run also stalled before assign_m365_license due to the incorrect OU breaking a downstream check. Fixed by trying an exact-match lookup before falling back to .title() normalization. This test now passes against tools.py v2 (see TC-01 and TC-02 for confirmed passing runs against the fixed code)."
+  }
+]

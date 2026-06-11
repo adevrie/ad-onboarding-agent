@@ -39,25 +39,6 @@ EXAMPLE_REQUESTS = [
     "Offboard tpatel — voluntary resignation, last day June 20, delegate to cthompson",
 ]
 
-# Best-effort styling: right-align user chat bubbles, left-align assistant.
-# Relies on Streamlit's internal DOM structure (data-testid attributes) and
-# the CSS :has() selector — purely cosmetic, safe to remove if it breaks
-# on a future Streamlit version.
-st.markdown(
-    """
-    <style>
-    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
-        flex-direction: row-reverse;
-        text-align: right;
-    }
-    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) [data-testid="stChatMessageContent"] {
-        text-align: right;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
 
 # =============================================================================
 # Logging handler — streams the agent's log records into a live placeholder
@@ -187,8 +168,43 @@ def main():
 
     render_sidebar()
 
+    # Best-effort styling: right-align user chat bubbles, left-align assistant.
+    # Relies on Streamlit's internal DOM structure (data-testid attributes) and
+    # the CSS :has() selector — purely cosmetic, safe to remove if it breaks
+    # on a future Streamlit version.
+    st.markdown(
+        """
+        <style>
+        [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
+            flex-direction: row-reverse;
+            text-align: right;
+        }
+        [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) [data-testid="stChatMessageContent"] {
+            text-align: right;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
     st.title("MOCKCO IT Workflow Orchestrator")
     st.caption("Agentic onboarding/offboarding automation powered by Claude + MCP-style tools")
+
+    with st.expander("About this system", expanded=False):
+        st.markdown("""
+        This agent automates IT onboarding and offboarding for the MOCKCO
+        hybrid enterprise environment. It uses Claude as a reasoning engine
+        with 9 MCP-style tools that simulate Active Directory, Exchange,
+        and Microsoft 365 operations.
+
+        **The agent decides** which tools to call and in what order —
+        no workflow steps are hardcoded in Python.
+
+        **Environment:** MOCKCO (mockcompany.local) · 4 locations ·
+        10 departments · Hybrid Exchange + M365
+
+        **Try the example requests in the sidebar to see the agent work.**
+        """)
 
     render_chat_history()
 
