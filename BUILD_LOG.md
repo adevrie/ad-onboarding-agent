@@ -413,6 +413,44 @@ The two findings from Scenario 7 are intentionally being kept as open, documente
 
 ---
 
+## Session 5 — 2026-06-17
+
+### Goals
+- Improve `app.py` UI layer: persist reasoning traces, transcript export, session token counter, environment reference panel, graceful initialization failure
+- Backend (`agent.py`, `tools.py`, `prompts.py`) not modified
+
+---
+
+### `app.py` UI Improvements (5 tasks)
+
+#### Task 1 — Persist reasoning trace across reruns
+
+Previously the reasoning trace was only visible while a request was running. On the next Streamlit rerun (e.g. a follow-up message), the trace that produced an earlier response was gone.
+
+Fix: `run_agent_request()` now saves `"trace": "\n".join(handler.lines)` alongside `"role"` and `"content"` in the messages dict. `render_chat_history()` checks `msg.get("trace")` (safe for pre-existing messages without the key) and renders a collapsed `st.expander("Reasoning Trace")` above the message content for any assistant turn with a non-empty trace. Past traces are now inspectable at any point in the conversation without cluttering the default view.
+
+#### Task 2 — Download Transcript button
+
+Added `format_transcript_as_markdown()`: iterates `st.session_state.messages` and builds a dated markdown string with `### User` / `### Assistant` headings, horizontal rule separators, and fenced code blocks for reasoning traces where present.
+
+A `st.download_button` in the sidebar (below "New Conversation") calls this helper on every render to keep the `data=` parameter current. The button is disabled when the conversation is empty and timestamps the filename (`mockco_transcript_YYYYMMDD_HHMMSS.md`) so repeated downloads don't silently overwrite each other.
+
+#### Task 3 — Running token counter
+
+`StreamlitTraceHandler` now carries `total_input_tokens` and `total_output_tokens` instance counters. The `emit()` method runs a compiled regex (`input_tokens=(\d+)\s+output_tokens=(\d+)`) against each raw log message; matching lines increment the counters. This requires no changes to `agent.py` — it parses the log lines `agent.py` already emits.
+
+After each `agent.run()` call (in the `finally` block, so errors are still counted), the handler's per-request totals are added to `st.session_state.total_input_tokens` and `total_output_tokens`. These accumulate across turns for the full session and reset to 0 when "New Conversation" is clicked. Two `st.metric` widgets in the sidebar display the running totals. If the log format ever changes and the regex stops matching, the counter silently stays at 0 — no crash.
+
+#### Task 4 — Environment Reference panel
+
+Added a collapsed `st.expander("Environment Reference")` at the bottom of the sidebar containing a static markdown summary of MOCKCO locations, M365 license tier assignments by role, and group naming conventions. Collapsed by default so it doesn't take up space, but a reviewer can open it to cross-check the agent's decisions (correct license tier? correct group names?) without leaving the app.
+
+#### Task 5 — Graceful agent initialization failure
+
+`get_agent()` previously let any exception from `OnboardingAgent()` propagate as an unhandled traceback. Now it wraps the constructor in a try/except: on failure it renders `st.error()` with the exception type, message, and a hint naming the specific model string in use, then calls `st.stop()`. The existing "ANTHROPIC_API_KEY not set" check in `main()` is unchanged — that fires first (key absent); this new handler covers the different failure mode where the key is present but initialization fails (invalid key format, network error, rejected model name, etc.).
+
+---
+
 ## Status Summary
 
 | Component | Status |
@@ -425,7 +463,7 @@ The two findings from Scenario 7 are intentionally being kept as open, documente
 | `prompts.py` — system prompt v2.1 (MOCKCO + robustness pass) | ✅ Complete |
 | `prompts_v1.py` — v1 prompt archived | ✅ Complete |
 | `main.py` — CLI entry point | ✅ Complete (MOCKCO example requests) |
-| `app.py` — Streamlit UI | ✅ Complete |
+| `app.py` — Streamlit UI | ✅ Complete (v2: persistent traces, transcript export, token counter, env reference, graceful init failure) |
 | `eval/test_cases.json` — 8 test cases | ✅ Complete |
 | `test_suite.py` — unit + agent tests | ✅ Written |
 | Manual scenario testing round (9 scenarios) | ✅ Complete — 8 pass, 1 partial with 2 documented findings |
@@ -439,10 +477,11 @@ The two findings from Scenario 7 are intentionally being kept as open, documente
 
 ## Pending / Next Steps (Week 2)
 
+- [x] `app.py` UI improvements — persistent traces, transcript export, token counter, environment reference, graceful init failure (Session 5)
 - [ ] **Resolve Finding 1** — decide whether `prompts.py` or `tools.py` is wrong regarding resignation forwarding defaults, then fix the inconsistent one
 - [ ] **Add Finding 2 to README Known Limitations** — no future-dated offboarding support
 - [ ] Run `python test_suite.py --unit` and `--agent` for a full automated pass; log results separately from this manual round
 - [ ] Continue incremental commits per draft feedback — one commit per meaningful change, not a single batch
-- [ ] Finalize the write-up's "What Changed: Draft to Final" section, incorporating the v2.1 prompt pass and this evaluation round
+- [ ] Finalize the write-up's "What Changed: Draft to Final" section, incorporating all Week 2 changes
 - [ ] Update the live Streamlit URL in README.md if the app is redeployed for any reason
 - [ ] Final review pass on BUILD_LOG.md and README.md before submission on 2026-06-25

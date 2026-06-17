@@ -11,6 +11,8 @@ Run with:
 
 import logging
 import os
+import re
+from datetime import datetime
 
 from dotenv import load_dotenv
 
@@ -51,13 +53,21 @@ class StreamlitTraceHandler(logging.Handler):
     live view of the agent's decision-making while run() is still executing.
     """
 
+    _TOKEN_RE = re.compile(r"input_tokens=(\d+)\s+output_tokens=(\d+)")
+
     def __init__(self, placeholder):
         super().__init__()
         self.placeholder = placeholder
         self.lines: list[str] = []
+        self.total_input_tokens: int = 0
+        self.total_output_tokens: int = 0
         self.setFormatter(logging.Formatter("%(asctime)s  %(message)s", datefmt="%H:%M:%S"))
 
     def emit(self, record: logging.LogRecord):
+        m = self._TOKEN_RE.search(record.getMessage())
+        if m:
+            self.total_input_tokens += int(m.group(1))
+            self.total_output_tokens += int(m.group(2))
         self.lines.append(self.format(record))
         self.placeholder.code("\n".join(self.lines), language="text")
 
@@ -73,12 +83,46 @@ def init_session_state():
         st.session_state.agent = None
     if "pending_request" not in st.session_state:
         st.session_state.pending_request = None
+    if "total_input_tokens" not in st.session_state:
+        st.session_state.total_input_tokens = 0
+    if "total_output_tokens" not in st.session_state:
+        st.session_state.total_output_tokens = 0
 
 
 def get_agent() -> OnboardingAgent:
     if st.session_state.agent is None:
-        st.session_state.agent = OnboardingAgent(model=MODEL, max_iterations=MAX_ITERATIONS)
+        try:
+            st.session_state.agent = OnboardingAgent(model=MODEL, max_iterations=MAX_ITERATIONS)
+        except Exception as e:
+            st.error(
+                f"**Failed to initialize the agent.**\n\n"
+                f"```\n{type(e).__name__}: {e}\n```\n\n"
+                f"Verify that your `ANTHROPIC_API_KEY` is valid and that the model name "
+                f"(`{MODEL}`) is correct."
+            )
+            st.stop()
     return st.session_state.agent
+
+
+# =============================================================================
+# Transcript export
+# =============================================================================
+
+def format_transcript_as_markdown() -> str:
+    lines = [
+        "# MOCKCO IT Workflow Orchestrator — Transcript\n",
+        f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n",
+    ]
+    for msg in st.session_state.messages:
+        lines.append("\n---\n")
+        if msg["role"] == "user":
+            lines.append(f"### User\n\n{msg['content']}")
+        else:
+            lines.append(f"### Assistant\n\n{msg['content']}")
+            trace = msg.get("trace")
+            if trace:
+                lines.append(f"\n**Reasoning Trace:**\n\n```\n{trace}\n```")
+    return "\n".join(lines)
 
 
 # =============================================================================
@@ -92,13 +136,31 @@ def render_sidebar():
         st.markdown(f"**Max iterations:** {MAX_ITERATIONS}")
 
         st.divider()
+        st.caption("Session Usage")
+        col1, col2 = st.columns(2)
+        col1.metric("Input tokens", f"{st.session_state.total_input_tokens:,}")
+        col2.metric("Output tokens", f"{st.session_state.total_output_tokens:,}")
+
+        st.divider()
 
         if st.button("New Conversation", use_container_width=True):
             if st.session_state.agent is not None:
                 st.session_state.agent.reset()
             st.session_state.messages = []
             st.session_state.pending_request = None
+            st.session_state.total_input_tokens = 0
+            st.session_state.total_output_tokens = 0
             st.rerun()
+
+        transcript_md = format_transcript_as_markdown()
+        st.download_button(
+            label="Download Transcript",
+            data=transcript_md,
+            file_name=f"mockco_transcript_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+            mime="text/markdown",
+            use_container_width=True,
+            disabled=len(st.session_state.messages) == 0,
+        )
 
         st.divider()
         st.subheader("Example Requests")
@@ -108,6 +170,25 @@ def render_sidebar():
                 st.session_state.pending_request = example
                 st.rerun()
 
+        st.divider()
+        with st.expander("Environment Reference", expanded=False):
+            st.markdown("""
+**Locations:** Holland · Grand Rapids (HQ) · Kalamazoo · Big Rapids
+
+**License Tiers:**
+| Tier | Typical Roles |
+|---|---|
+| E5 | IT Admins, General Managers, Executives |
+| E3 | Engineers, HR, Sales Managers |
+| F3 | Frontline / production workers, drivers |
+| Business Premium | Purchasing, Production Control |
+
+**Group Naming:**
+- `SG-Department-Access` — security groups
+- `SG-Role-Title` — role-based groups
+- `DL-GroupName` — distribution lists
+            """)
+
 
 # =============================================================================
 # Chat rendering + agent execution
@@ -116,6 +197,10 @@ def render_sidebar():
 def render_chat_history():
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
+            trace = msg.get("trace")
+            if trace:
+                with st.expander("Reasoning Trace"):
+                    st.code(trace, language="text")
             st.markdown(msg["content"])
 
 
@@ -143,10 +228,16 @@ def run_agent_request(user_input: str):
                 )
             finally:
                 agent_logger.removeHandler(handler)
+                st.session_state.total_input_tokens += handler.total_input_tokens
+                st.session_state.total_output_tokens += handler.total_output_tokens
 
         st.markdown(response_text)
 
-    st.session_state.messages.append({"role": "assistant", "content": response_text})
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": response_text,
+        "trace": "\n".join(handler.lines),
+    })
 
 
 # =============================================================================
