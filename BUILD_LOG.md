@@ -342,6 +342,77 @@ Instructor feedback received on the draft submission (Week 1):
 
 ---
 
+## Session 4 — 2026-06-17
+
+### Goals
+- Apply a robustness pass to `prompts.py` (v2.1): ambiguous offboarding classification, tool failure handling, multi-person requests, unlisted-role license fallback, dependency rationale
+- Run a broad set of manual scenario tests against the live Streamlit app to stress-test the new prompt language
+- Document results, including newly discovered issues
+
+---
+
+### Prompt Robustness Pass (`prompts.py` v2.1)
+
+Added five sections to the system prompt without touching the underlying tool dependency logic (which remains correctly enforced by tool descriptions, not Python):
+
+1. **Explicit offboarding type classification** — the model must determine resignation / termination / security incident before acting, and must ask rather than guess if the request doesn't make this clear.
+2. **Tool failure handling procedure** — note the failure, continue independent steps, skip dependent steps, flag with a specific recommended action.
+3. **Multi-person request handling** — process people sequentially, one full workflow at a time, with separated results.
+4. **Unlisted-role license fallback** — default to E3 and explicitly flag the assumption for IT review.
+5. **Dependency rationale** — each step in the onboarding chain now states *why* it gates the next, including an explicit instruction to push back (and explain why) if asked to skip a step out of order.
+
+Considered but rejected: a Claude Code-generated rewrite that proposed removing deterministic dependency language ("always follow this order") in favor of more open-ended "decide the sequence based on context" phrasing, on the theory that this would make the system "more agentic." Rejected because the dependency order is a true technical constraint (a license cannot activate against a mailbox that doesn't exist), not an arbitrary process step — removing it would not move the genuine decision point anywhere, since `agent.py` already contains zero hardcoded sequencing. It would only make the model more likely to attempt an invalid action. The five additions above target sections of the prompt where ambiguity is real (offboarding type, unlisted roles, tool failures) rather than removing guidance where the system is correctly deterministic.
+
+---
+
+### Evaluation Round — Manual Scenario Testing (live Streamlit app)
+
+Ran 9 scenarios against the deployed app to validate v2.1 behavior. Full traces captured from the live UI.
+
+| # | Scenario | Result | Key Finding |
+|---|---|---|---|
+| 1 | Onboard HR Generalist (Marcus Webb, Holland) | Pass | Correct parallel tool calls with explicit dependency reasoning in trace |
+| 2 | Onboard Purchasing Agent (Lisa Chen, Grand Rapids) | Pass | Correct Business Premium tier; correct dependency order |
+| 3 | Onboard IT Admin (Priya Nair, Grand Rapids) | Pass | Dual account creation confirmed again; admin account correctly excluded from mailbox/license |
+| 4 | Onboard unlisted role (Tom Reyes, "Logistics Coordinator," Big Rapids) | Pass | `template_matched=False` correctly triggered; defaulted to E3 with explicit flag; independently omitted `SG-Role-Driver` as inappropriate for a non-driver role and explained why |
+| 5 | Ambiguous offboarding ("Take away tpatel's access, she's done here") | Pass | Correctly refused to guess; listed all three offboarding types with consequences before proceeding |
+| 6 | Ambiguous offboarding ("Termination") | Pass | Correctly identified that "termination" alone is ambiguous between for-cause and general departure; asked for clarification |
+| 7 | Clear resignation (mchen, delegate to cthompson) | Partial | Workflow executed correctly, but surfaced two real issues — see below |
+| 8 | Batch onboarding (20 Operations Managers, no names given) | Pass | Correctly identified missing required data (individual names) before attempting any account creation; proactively flagged the 20-license consumption as unusual |
+| 9 | Out-of-order request ("assign a license, skip AD setup," Sarah Chen) | Pass | Checked `get_user_status` first, discovered the account already existed with a license already assigned, and reported "no action needed" rather than blindly complying with or refusing the hypothetical |
+
+**8 of 9 scenarios passed cleanly. Scenario 7 passed functionally but surfaced two findings, documented below as the most valuable result of this round.**
+
+---
+
+### Finding 1 — Forwarding default does not match the system prompt's stated language
+
+In Scenario 7 (mchen resignation), the agent's own response noted: *"Email forwarding was auto-enabled to cthompson (30-day default)... was not explicitly approved in your request."*
+
+`prompts.py` states forwarding should be "enabled if approved" for resignations — implying it should default to off. The actual behavior in `tools.py`'s `handle_revoke_access` auto-enables 30-day forwarding for any resignation, regardless of explicit approval. The system prompt and the tool implementation disagree with each other.
+
+**Status:** Not yet fixed. Two valid resolutions: (a) change `prompts.py` to state forwarding defaults to on for resignations unless declined, matching current tool behavior, or (b) change `handle_revoke_access` to require an explicit forwarding flag, matching current prompt language. Decision and fix to be made before final submission — this is exactly the kind of documented, real discrepancy that's stronger evaluation evidence than a suite of passing tests alone.
+
+---
+
+### Finding 2 — No mechanism for future-dated offboarding
+
+Scenario 7's request specified "last day is Friday," but the system has no way to delay execution — `disable_ad_user` and `revoke_access` always execute immediately when called. The agent correctly detected this mismatch and flagged it rather than silently disabling early without comment:
+
+> *"Last day is Friday (2026-06-19). This request was actioned today (2026-06-17)... If access should remain active through Friday, this was executed early — please confirm timing."*
+
+**Status:** Documented as a known limitation rather than fixed. A future version could accept an `effective_date` parameter and queue the action, but this would require a scheduling mechanism outside the current synchronous tool-call model. Added to Known Limitations in README.
+
+---
+
+### What This Round Demonstrates for the Rubric
+
+The unlisted-role test (Scenario 4) is the strongest single piece of evidence collected so far for genuine agentic reasoning: the model not only applied the documented fallback (default to E3, flag it) but independently extended that reasoning to omit a role-specific group that didn't fit the situation — a decision not explicitly covered by any rule in `prompts.py`. That is reasoning from context, not pattern-matching a rule.
+
+The two findings from Scenario 7 are intentionally being kept as open, documented issues rather than quietly patched and forgotten. An evaluation that surfaces a real prompt/implementation mismatch is more credible than one that reports all green checkmarks.
+
+---
+
 ## Status Summary
 
 | Component | Status |
@@ -351,23 +422,27 @@ Instructor feedback received on the draft submission (Week 1):
 | `tools.py` — tool dispatcher | ✅ Complete |
 | `tools.py` — `.title()` bug fix | ✅ Fixed |
 | `agent.py` — agentic loop | ✅ Complete |
-| `prompts.py` — system prompt v2 (MOCKCO) | ✅ Complete |
+| `prompts.py` — system prompt v2.1 (MOCKCO + robustness pass) | ✅ Complete |
 | `prompts_v1.py` — v1 prompt archived | ✅ Complete |
 | `main.py` — CLI entry point | ✅ Complete (MOCKCO example requests) |
 | `app.py` — Streamlit UI | ✅ Complete |
 | `eval/test_cases.json` — 8 test cases | ✅ Complete |
 | `test_suite.py` — unit + agent tests | ✅ Written |
+| Manual scenario testing round (9 scenarios) | ✅ Complete — 8 pass, 1 partial with 2 documented findings |
 | First live agent run | ✅ Completed — trace documented above |
 | Deployment (Streamlit Cloud) | ✅ Live and tested end to end |
-| README — full architecture + examples | ✅ Complete |
+| README — full architecture + examples | ✅ Complete (needs Known Limitations update for Finding 2) |
 | Draft feedback response | ✅ Complete (see above) |
+| Forwarding default discrepancy (Finding 1) | 🔲 Open — needs a decision and fix before final |
 
 ---
 
 ## Pending / Next Steps (Week 2)
 
-- [ ] Run `python test_suite.py --unit` and `--agent` for a full current pass; log results as a new session entry
+- [ ] **Resolve Finding 1** — decide whether `prompts.py` or `tools.py` is wrong regarding resignation forwarding defaults, then fix the inconsistent one
+- [ ] **Add Finding 2 to README Known Limitations** — no future-dated offboarding support
+- [ ] Run `python test_suite.py --unit` and `--agent` for a full automated pass; log results separately from this manual round
 - [ ] Continue incremental commits per draft feedback — one commit per meaningful change, not a single batch
-- [ ] Finalize the write-up's "What Changed: Draft to Final" section once all Week 2 work is complete
+- [ ] Finalize the write-up's "What Changed: Draft to Final" section, incorporating the v2.1 prompt pass and this evaluation round
 - [ ] Update the live Streamlit URL in README.md if the app is redeployed for any reason
 - [ ] Final review pass on BUILD_LOG.md and README.md before submission on 2026-06-25
