@@ -121,9 +121,13 @@ The parallel tool calling behavior is strong evidence of genuine reasoning: on T
 |---|---|
 | `agent.py` | `OnboardingAgent` class — API calls, tool execution loop, per-call logging |
 | `tools.py` | 9 MCP tool schemas (JSON Schema) + handler functions + dispatcher |
-| `prompts.py` | System prompt — MOCKCO environment context, workflow rules, license tiers, safety constraints |
+| `prompts.py` | System prompt v2.2 — MOCKCO environment context, workflow rules, license tiers, safety constraints |
+| `prompts_v1.py` | Original v1 system prompt (Contoso environment) — archived for prompt iteration evidence |
+| `app.py` | Streamlit chat UI — live trace, persistent history, transcript export, token counter |
 | `main.py` | CLI entry point with interactive loop and conversation reset |
 | `test_suite.py` | Unit tests (tool layer, no API) + agent integration tests |
+| `eval/test_cases.json` | 8 structured evaluation scenarios with expected tools, criteria, and results |
+| `TestPromptsandResponses.md` | Live agent traces from 8 manual test scenarios run against the deployed app |
 | `requirements.txt` | Python dependencies |
 | `BUILD_LOG.md` | Full development log — decisions, prompt iterations, bugs, test results |
 
@@ -384,15 +388,43 @@ Single tool call — `get_user_status("Sandra Lopez")` via partial name match. R
 
 ## Evaluation
 
-| Scenario | Turns | Tools Called | Result |
+### Automated Tests (`test_suite.py`)
+
+72 unit tests across 12 test classes — all pass, no API calls required (~5 seconds).
+
+```bash
+python test_suite.py --unit
+```
+
+Covers: all 9 tool handlers, tool definitions, error conditions, stateful behavior (create → mailbox → license chain, license inventory rebalance on revoke), offboarding type distinctions (resignation vs. termination vs. security incident), partial-name lookup, and the v1 OU-placement regression.
+
+3 agent integration tests are available with a live API key:
+
+```bash
+python test_suite.py --agent
+```
+
+### Structured Test Cases (`eval/test_cases.json`)
+
+8 structured scenarios with expected tool sequences, order constraints, pass/fail criteria, and actual results from live runs. TC-08 is intentionally documented as a historical failure (the v1 `.title()` bug) — fixed in v2 and confirmed passing, but preserved as evidence of a real bug found and fixed during development.
+
+### Manual Scenario Testing (live Streamlit app)
+
+9 scenarios run against the deployed app after the v2.1 prompt robustness pass. Full traces in `TestPromptsandResponses.md`.
+
+| # | Scenario | Result | Key Evidence |
 |---|---|---|---|
-| Standard onboarding (HR Generalist, Holland) | 5 | 6 | Pass |
-| IT Admin onboarding (dual account) | 5 | 6 + admin account | Pass |
-| Emergency offboarding (security incident) | 3 | 3 (reversed order) | Pass |
-| Normal offboarding (resignation) | 3 | 3 | Pass |
-| Ambiguous request (no location given) | 1 | 0 | Pass — agent asks for location |
-| Status check (existing user by full name) | 1 | 1 | Pass |
-| Status check (unknown user) | 1 | 1 | Pass — error handled gracefully |
+| 1 | Onboard HR Generalist (Marcus Webb, Holland) | Pass | Parallel tool calls; correct E3 tier |
+| 2 | Onboard Purchasing Agent (Lisa Chen, Grand Rapids) | Pass | Correct Business Premium tier; correct dependency order |
+| 3 | Onboard IT Admin (Priya Nair, Grand Rapids) | Pass | Dual account creation; admin account excluded from mailbox/license |
+| 4 | Onboard unlisted role (Tom Reyes, "Logistics Coordinator") | Pass | E3 fallback flagged; `SG-Role-Driver` independently omitted as role-inappropriate |
+| 5 | Ambiguous offboarding ("she's done here") | Pass | Refused to guess; listed all three types before acting |
+| 6 | Ambiguous offboarding ("Termination") | Pass | Identified "termination" alone is ambiguous; asked for clarification |
+| 7 | Clear resignation (mchen, delegate to cthompson) | Partial | Correct execution; surfaced two real findings (forwarding default, future-dated timing) |
+| 8 | Batch onboarding (20 managers, no names given) | Pass | Correctly required individual names; flagged unusual license volume |
+| 9 | Out-of-order request ("assign license, skip AD setup") | Pass | Checked status first; found account already provisioned; reported no action needed |
+
+**8 of 9 pass cleanly.** Scenario 7 surfaced two real findings documented in BUILD_LOG.md — both resolved before final submission.
 
 **Documented failure and fix:** First live run placed a new user in `OU=General` instead of the correct location OU due to a `.title()` normalization bug (`"IT".title() == "It"`). Identified from live run output, fixed in Session 2. See BUILD_LOG.md for details.
 
