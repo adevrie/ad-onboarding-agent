@@ -465,22 +465,23 @@ Added a collapsed `st.expander("Environment Reference")` at the bottom of the si
 | `main.py` — CLI entry point | ✅ Complete (MOCKCO example requests) |
 | `app.py` — Streamlit UI | ✅ Complete (v2: persistent traces, transcript export, token counter, env reference, graceful init failure) |
 | `eval/test_cases.json` — 8 test cases | ✅ Complete |
-| `test_suite.py` — unit + agent tests | ✅ Written |
+| `test_suite.py` — unit + agent tests | ✅ Complete — 72 unit tests, all pass; 3 agent integration tests |
 | Manual scenario testing round (9 scenarios) | ✅ Complete — 8 pass, 1 partial with 2 documented findings |
 | First live agent run | ✅ Completed — trace documented above |
 | Deployment (Streamlit Cloud) | ✅ Live and tested end to end |
-| README — full architecture + examples | ✅ Complete (needs Known Limitations update for Finding 2) |
+| README — full architecture + examples | ✅ Complete (Known Limitations updated for Finding 2) |
 | Draft feedback response | ✅ Complete (see above) |
-| Forwarding default discrepancy (Finding 1) | 🔲 Open — needs a decision and fix before final |
+| Forwarding default discrepancy (Finding 1) | ✅ Resolved — prompts.py v2.2 updated to match tools.py auto-forward behavior |
+| Future-dated offboarding limitation (Finding 2) | ✅ Documented in README Known Limitations |
 
 ---
 
 ## Pending / Next Steps (Week 2)
 
 - [x] `app.py` UI improvements — persistent traces, transcript export, token counter, environment reference, graceful init failure (Session 5)
-- [ ] **Resolve Finding 1** — decide whether `prompts.py` or `tools.py` is wrong regarding resignation forwarding defaults, then fix the inconsistent one
-- [ ] **Add Finding 2 to README Known Limitations** — no future-dated offboarding support
-- [ ] Run `python test_suite.py --unit` and `--agent` for a full automated pass; log results separately from this manual round
+- [x] **Resolved Finding 1** — `prompts.py` v2.2 updated to match `tools.py` auto-forward behavior for resignations
+- [x] **Added Finding 2 to README Known Limitations** — no future-dated offboarding support
+- [x] `test_suite.py` created — 72 unit tests (all pass) + 3 agent integration tests
 - [ ] Continue incremental commits per draft feedback — one commit per meaningful change, not a single batch
 - [ ] Finalize the write-up's "What Changed: Draft to Final" section, incorporating all Week 2 changes
 - [ ] Update the live Streamlit URL in README.md if the app is redeployed for any reason

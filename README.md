@@ -405,6 +405,7 @@ Single tool call — `get_user_status("Sandra Lopez")` via partial name match. R
 - **Single-session context** — no memory between conversations. Each `agent.reset()` clears history.
 - **No approval gates** — destructive operations execute immediately. A production version would insert a human-approval step before irreversible actions.
 - **License inventory not thread-safe** — concurrent requests in a multi-user deployment could cause count inconsistencies.
+- **No future-dated offboarding** — `disable_ad_user` and `revoke_access` execute immediately when called. There is no mechanism to schedule an action for a future date (e.g. "last day is Friday"). The agent detects and flags this timing mismatch rather than silently acting early, but cannot defer execution. A production version would require a scheduling layer.
 
 ---
 
