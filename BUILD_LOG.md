@@ -451,6 +451,69 @@ Added a collapsed `st.expander("Environment Reference")` at the bottom of the si
 
 ---
 
+## Session 6 — 2026-06-22
+
+### Goals
+- Create `test_suite.py` with real unit tests covering all 9 tool handlers
+- Resolve all open pre-submission items (Finding 1, Finding 2, missing test file)
+- Format live test traces as a structured markdown document
+- Final submission readiness review
+
+---
+
+### `test_suite.py` — Unit and Integration Tests
+
+Created 72 unit tests across 12 test classes, covering:
+
+- **Tool definitions** — verifies all 9 tools are defined with `name`, `description`, and `input_schema.required` fields
+- **Onboarding template lookup** — known role, case-insensitive match, unknown role fallback, license tier assertions per role
+- **Department policy lookup** — exact match, case-insensitive match (regression for the `.title()` bug), unknown department
+- **User creation** — username format (`firstinitiallastname`), email format, OU placement for all four locations, fallback for unknown location, duplicate suffix, IT auto-admin creation, admin account has no mailbox or license, non-IT does not create admin account, contractor suffix
+- **Group assignment** — success, persistence in `_AD_USERS_DB`, unknown user, invalid group to failed list, count
+- **Mailbox provisioning** — success, idempotent (already provisioned), unknown user, email format
+- **License assignment** — success, inventory decremented, fails without mailbox, fails for unknown user, fails if already assigned
+- **Disable user** — success, moves to Disabled OU, already disabled, unknown user, partial name lookup
+- **Revoke access** — groups removed, license returned to inventory, resignation enables forwarding, termination blocks forwarding, security incident triggers `INCIDENT_RESPONSE_TRIGGERED`, priority field, unknown user, audit ticket format
+- **User status** — by username, by partial name, not found, required fields, contractor flag, admin account flag
+- **Tool dispatcher** — unknown tool returns error, valid dispatch, missing required params returns error
+- **OU placement regression** — confirms the v1 `.title()` bug is fixed for HR, IT, and a full create-user flow
+
+State isolation: each test class inherits from `ToolTestCase`, which saves `_AD_USERS_DB` and `_LICENSE_INVENTORY` via `copy.deepcopy` in `setUp` and restores them in `tearDown`. Tests do not interfere with each other regardless of execution order.
+
+Three agent integration tests are gated behind `--agent` (requires `ANTHROPIC_API_KEY`): status check does not mutate state, onboarding creates a user in the correct OU, unknown user is handled gracefully.
+
+**All 72 unit tests pass.**
+
+---
+
+### Finding 1 Resolved (`prompts.py` v2.2)
+
+Resolved the prompt/tool mismatch identified in Session 4: `prompts.py` previously described resignation forwarding as "enabled if approved" (opt-in), while `tools.py`'s `handle_revoke_access` auto-enables 30-day forwarding for all resignations. Rather than changing `tools.py`, the prompt was updated to match actual tool behavior (auto-on, but always surfaced in Outstanding Items so the user can decline). Version header bumped to v2.2.
+
+The choice to align the prompt to the tool rather than the reverse: changing `tools.py` to require an explicit forwarding flag would be a behavior change with downstream test implications. The current auto-on behavior is actually the safer default for a real offboarding (you want mail to flow somewhere while the account is still being handed off), and the agent already flags it in every resignation response. Updating the prompt is the minimal, lower-risk fix.
+
+---
+
+### Finding 2 Documented (README Known Limitations)
+
+Added a Known Limitations bullet explaining that `disable_ad_user` and `revoke_access` always execute immediately — there is no mechanism to schedule a future-dated action. The agent detects timing mismatches and surfaces them in Outstanding Items, but cannot defer execution. A production version would require a scheduling layer. This is documented rather than fixed because the fix would require architectural changes (a job queue, a persistence layer) outside the scope of this project.
+
+---
+
+### Live Test Traces Reformatted (`TestPromptsandResponses.md`)
+
+Converted the raw `.txt` trace log to a structured markdown document with scenario headers, result badges, fenced code blocks for reasoning traces, and agent responses formatted as proper markdown tables and bullet lists. Scenario 4 (ambiguous offboarding multi-turn) was restructured as a labeled three-turn conversation. The original `.txt` was removed.
+
+---
+
+### Final Submission Review — 2026-06-22
+
+Confirmed clean working tree, all files present, all README references resolve to real files, 72 unit tests pass, live deployment active, 9 incremental commits.
+
+**Submission deadline: 2026-06-25**
+
+---
+
 ## Status Summary
 
 | Component | Status |
@@ -460,12 +523,13 @@ Added a collapsed `st.expander("Environment Reference")` at the bottom of the si
 | `tools.py` — tool dispatcher | ✅ Complete |
 | `tools.py` — `.title()` bug fix | ✅ Fixed |
 | `agent.py` — agentic loop | ✅ Complete |
-| `prompts.py` — system prompt v2.1 (MOCKCO + robustness pass) | ✅ Complete |
+| `prompts.py` — system prompt v2.2 (MOCKCO + robustness pass + Finding 1 fix) | ✅ Complete |
 | `prompts_v1.py` — v1 prompt archived | ✅ Complete |
 | `main.py` — CLI entry point | ✅ Complete (MOCKCO example requests) |
 | `app.py` — Streamlit UI | ✅ Complete (v2: persistent traces, transcript export, token counter, env reference, graceful init failure) |
 | `eval/test_cases.json` — 8 test cases | ✅ Complete |
 | `test_suite.py` — unit + agent tests | ✅ Complete — 72 unit tests, all pass; 3 agent integration tests |
+| `TestPromptsandResponses.md` — 8 live test traces | ✅ Complete |
 | Manual scenario testing round (9 scenarios) | ✅ Complete — 8 pass, 1 partial with 2 documented findings |
 | First live agent run | ✅ Completed — trace documented above |
 | Deployment (Streamlit Cloud) | ✅ Live and tested end to end |
@@ -476,13 +540,34 @@ Added a collapsed `st.expander("Environment Reference")` at the bottom of the si
 
 ---
 
-## Pending / Next Steps (Week 2)
+## Submission
 
-- [x] `app.py` UI improvements — persistent traces, transcript export, token counter, environment reference, graceful init failure (Session 5)
-- [x] **Resolved Finding 1** — `prompts.py` v2.2 updated to match `tools.py` auto-forward behavior for resignations
-- [x] **Added Finding 2 to README Known Limitations** — no future-dated offboarding support
-- [x] `test_suite.py` created — 72 unit tests (all pass) + 3 agent integration tests
-- [ ] Continue incremental commits per draft feedback — one commit per meaningful change, not a single batch
-- [ ] Finalize the write-up's "What Changed: Draft to Final" section, incorporating all Week 2 changes
-- [ ] Update the live Streamlit URL in README.md if the app is redeployed for any reason
-- [ ] Final review pass on BUILD_LOG.md and README.md before submission on 2026-06-25
+**Submitted:** 2026-06-25 (deadline)  
+**Live deployment:** https://ad-app-agent-gvsu.streamlit.app/  
+**Repository:** https://github.com/adevrie/ad-onboarding-agent  
+
+### What Changed: Draft to Final
+
+| Area | Draft | Final |
+|---|---|---|
+| Mock environment | Generic "Contoso Corporation," department-based OUs | MOCKCO (mockcompany.local), location-based OUs, 4 sites, real domain conventions |
+| System prompt | v1 — basic role/tool description, no explicit offboarding types | v2.2 — MOCKCO-specific grounding, explicit offboarding classification, tool failure handling, multi-person sequencing, unlisted-role fallback, dependency rationale |
+| Evaluation | None | 8 structured test cases (`eval/test_cases.json`), 9-scenario manual round, 72 automated unit tests |
+| UI | CLI only (`main.py`) | Streamlit app deployed to Streamlit Cloud — live trace, persistent history, transcript export, token counter, environment reference |
+| Documentation | Initial README | Full architecture docs, traced run, known limitations, prompt iteration history (`prompts_v1.py`) |
+| Commit history | Single large commit | 9 incremental commits reflecting the actual project evolution |
+| Open findings | — | 2 findings surfaced, documented, and resolved during Week 2 testing |
+
+### Week 2 Completed Items
+
+- [x] Deployed to Streamlit Cloud — tested end to end
+- [x] `prompts.py` v2.1 — robustness pass (5 additions: offboarding classification, tool failure handling, multi-person, unlisted-role fallback, dependency rationale)
+- [x] `prompts.py` v2.2 — resolved Finding 1 (forwarding default prompt/tool mismatch)
+- [x] `prompts_v1.py` — v1 prompt archived for rubric evidence
+- [x] `eval/test_cases.json` — 8 structured test cases including a documented historical failure
+- [x] `test_suite.py` — 72 unit tests (all pass) + 3 agent integration tests
+- [x] `app.py` v2 — persistent traces, transcript export, token counter, environment reference, graceful init failure
+- [x] `TestPromptsandResponses.md` — 8 live test traces formatted as structured markdown
+- [x] README Known Limitations updated (Finding 2: no future-dated offboarding)
+- [x] Draft feedback addressed: incremental commits, "What Changed" documented here
+- [x] Final review — clean working tree, all references valid, all tests pass
